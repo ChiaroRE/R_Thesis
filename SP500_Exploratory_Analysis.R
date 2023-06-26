@@ -22,27 +22,59 @@ plot(Time_SP[-1],Rt_SP,
 
 summary(Rt_SP)
 
+#outliers##
+outliers_SP <- sum(Rt_SP > 0.15 | Rt_SP < -0.15)
+
+z_scores <- (Rt_SP - mean(Rt_SP)) / sd(Rt_SP)
+
+# Step 3: Set threshold (e.g., 2 or 3)
+threshold <- 5
+
+# Step 4: Identify outliers
+outliers <- Rt_SP[abs(z_scores) > threshold]
+
+# Print the outliers
+print(outliers)
+
+
 #### LOG RETURNS ##############################################################################################
 rt_SP <- diff(pt_SP, lag = 1)
 
 plot(Time_SP[-1],rt_SP,
-     type = "l",
-     main = "S&P500 Log Returns: 25/12/2012 - 21/12/2022",
+      type = "l",
+     main = "S&P500 Log-Returns: 25/12/2012 - 21/12/2022",
      xlab = "Time",
-     ylab = "Returns")
+     ylab = "Returns",
+     col = "blue")
 
 summary(rt_SP)
 cor(Rt_SP,rt_SP)                # correlation between Returns and Log Returns, expected good approximation for +-5%
 plot(Rt_SP,rt_SP)
 
+library(plotrix)
+std.error(rt_SP)
+
+
+range_SP <- max(rt_SP) - min(rt_SP)
+range_SP
+
+IQR_SP <- IQR(rt_SP)
+
+
 ##### MOMENTS #################################################################################################
 library(moments)
 sd_SP <- sd(rt_SP)
-skew_SP <- skewness(rt_SP)         
-kurt_SP <- kurtosis(Rt_SP)
+se_sd_SP <- sd_SP/sqrt(2*n_SP - 2)
+skew_SP <- skewness(rt_SP)
+V_skew = 6 * n_SP * (n_SP - 1) / ((n_SP - 2) * (n_SP + 1) * (n_SP + 3))
+sqrt(V_skew)
+kurt_SP <- kurtosis(rt_SP)
+V_kur = 4 * (n_SP^2 - 1) * V_skew / ((n_SP - 3) * (n_SP + 5))
+sqrt(V_kur)
+
 
 # both skewness and kurtosis are signs of non-normality since skewness != 0 and kurtosis > 3, both significantly
-# still less than what we can observe in the EUROSTOXX (especially excess kurtosis)
+# still less than what we can observe in the SPOSTOXX (especially excess kurtosis)
 
 ##### TEST FOR MEAN = 0 #######################################################################################
 t.test(rt_SP)
@@ -55,17 +87,17 @@ jarque.bera.test(rt_SP)
 
 qqnorm(rt_SP,
        datax = TRUE,
-       main = "Normal qq plot for LogReturns")
+       main = "Normal qq plot for SP LogReturns")
 qqline(rt_SP,
        datax = TRUE)
 # as we could expect, while the sample and theoretical quantiles are approximately equal in the central range
 # (around 0.00) the tails deviate from the theoretical quantiles. This indicates fatter tails than a 
-# normal distributions as is often the case with financial data. We now proceed to test the hypothesis of a 
+# normal distribution as is often the case with financial data. We now proceed to test the hypothesis of a 
 # t-distribution at different levels of degrees of freedom
 
 ####### TESTING FOR T-DISTRIBUTION ############################################################################
 grid <- (1:n_SP)/(n_SP+1)
-par(mfrow=c(1,4))
+par(mfrow=c(1,3))
 
 qqplot(rt_SP, qt(grid,df=5), 
        main="t-plot, df = 5 ",
@@ -184,11 +216,11 @@ par(mfrow=c(1,2))
 acf(rt_SP)
 pacf(rt_SP)       
 Box.test(rt_SP, lag = 5, type = c("Ljung-Box")) 
-Box.test(rt_SP, lag = 7, type = c("Ljung-Box")) 
-Box.test(rt_SP, lag = 9, type = c("Ljung-Box")) 
-Box.test(rt_SP, lag = 21, type = c("Ljung-Box")) 
-Box.test(rt_SP, lag = 23, type = c("Ljung-Box")) 
-Box.test(rt_SP, lag = 30, type = c("Ljung-Box")) 
+Box.test(rt_SP, lag = 10, type = c("Ljung-Box")) 
+Box.test(rt_SP, lag = 20, type = c("Ljung-Box")) 
+
+cor(rt_SP,rt_SP)
+
 
 # Using the Ljung-Box test, we test the null hypotheis of serial independence. As we can see from the 
 # correlogram, there are different lags at which the serial correlation could be considered statistically
@@ -197,5 +229,266 @@ Box.test(rt_SP, lag = 30, type = c("Ljung-Box"))
 # 1% level: 
 # lag 5 - lag 7 - lag 9 - lag 21 - lag 23 - lag 30 
 # This could be a starting point for eventual modelling
+
+##ARCH effect############################################################
+sq_SP <- rt_SP^2
+par(mfrow=c(1,2))
+acf(sq_SP)
+pacf(rt_SP)
+pacf(sq_SP)
+
+##ARMA model########################################################################
+library(broom)
+niter_order = 5
+sigma = matrix(0, nrow = niter_order, ncol = niter_order)
+AIC = matrix(0, nrow = niter_order, ncol = niter_order)
+bic = matrix(0, nrow = niter_order, ncol = niter_order)
+LB = matrix(0, nrow = niter_order, ncol = niter_order)
+for(i in c(0:4))
+{
+  for(j in c(0:4)){
+    fitAR <- arima(rt_SP, order = c(i,0,j))
+    sigma[i + 1,j + 1] = fitAR$sigma2
+    AIC[i + 1,j + 1] = fitAR$aic
+    bic[i + 1,j + 1] = BIC(fitAR)
+    y = Box.test(fitAR$residuals, lag = 10, type = c("Ljung-Box"))
+    LB[i + 1,j + 1] = y$p.value 
+  }
+}
+
+#finding minimum variance
+vector_sigma <- as.vector(sigma)
+sorted_sigma <- sort(vector_sigma)
+min_sigma <- head(sorted_sigma, 5)
+min_sigma_order <- list()
+for(i in c(1:5))
+{
+  min_sigma_order[[i]] <- which(sigma == min_sigma[i], arr.ind = TRUE)
+}
+min_sigma_order
+
+
+#finding minimum AIC
+vector_AIC <- as.vector(AIC)
+sorted_AIC <- sort(vector_AIC)
+min_AIC <- head(sorted_AIC, 10)
+min_AIC_order <- list()
+for(i in c(1:10))
+{
+  min_AIC_order[[i]] <- which(AIC == min_AIC[i], arr.ind = TRUE)
+}
+min_AIC_order
+
+
+##finding minimum BIC
+vector_bic <- as.vector(bic)
+sorted_bic <- sort(vector_bic)
+min_bic <- head(sorted_bic, 5)
+min_bic_order <- list()
+for(i in c(1:5))
+{
+  min_bic_order[[i]] <- which(bic == min_bic[i], arr.ind = TRUE)
+}
+min_bic_order
+
+
+##finding maximum LB
+vector_LB <- as.vector(LB)
+sorted_LB <- sort(vector_LB)
+max_LB <- tail(sorted_LB, 5)
+max_LB_order <- list()
+for(i in c(1:5))
+{
+  max_LB_order[[i]] <- which(LB == max_LB[i], arr.ind = TRUE)
+}
+max_LB_order
+
+#ARMA minimum AIC
+SP_ARMA_44 <- arima(rt_SP, order = c(4,0,4), include.mean = FALSE)
+acf(SP_ARMA_44$residuals)
+SP_ARMA_44
+coeftest(SP_ARMA_44) ##too many parameters are insignificant
+LB[5,5]
+
+SP_ARMA_34 <- arima(rt_SP, order = c(3,0,4), include.mean = FALSE)
+acf(SP_ARMA_34$residuals)
+SP_ARMA_34
+coeftest(SP_ARMA_34) ##plausible but parameters AR(2) and intercept can be confirmed only at the 10% level. Still 6/7 are valid at the 5%
+Box.test(SP_ARMA_34$residuals,  lag = 10, type = c("Ljung-Box"))
+
+SP_ARMA_43 <- arima(rt_SP, order = c(4,0,3), include.mean = FALSE)
+acf(SP_ARMA_43$residuals)
+SP_ARMA_43
+coeftest(SP_ARMA_43) ##cannot compute 
+LB[5,4]
+
+SP_ARMA_31 <- arima(rt_SP, order = c(3,0,1))
+acf(SP_ARMA_31$residuals)
+SP_ARMA_31
+coeftest(SP_ARMA_31) ##strongly confirmed 4/5 parameters (<0.01 including intercept), but AR(3) strongly insignificant (0.87)
+LB[4,2]                     ##residuals appear to deviate often from confidence band
+
+SP_ARMA_32 <- arima(rt_SP, order = c(3,0,2))
+acf(SP_ARMA_32$residuals)
+SP_ARMA_32
+coeftest(SP_ARMA_32) ##situation similar to 3,1 but with the only insignificant one MA(2) at 0.28
+LB[4,3]                     ##residuals less correlated
+
+SP_ARMA_01 <- arima(rt_SP, order = c(0,0,1))
+acf(SP_ARMA_01$residuals)
+SP_ARMA_01
+coeftest(SP_ARMA_01) ##only intercept confirmed at the 10%, residuals show some correlation
+LB[1,2]
+
+
+SP_ARMA_10 <- arima(rt_SP, order = c(1,0,0))
+acf(SP_ARMA_10$residuals)
+SP_ARMA_10
+coeftest(SP_ARMA_10) ##only intercept confirmed at the 10% (more than 0,1) residuals sligthly correlated
+LB[2,1]
+
+SP_ARMA_24 <- arima(rt_SP, order = c(2,0,4))
+acf(SP_ARMA_24$residuals)
+SP_ARMA_24
+coeftest(SP_ARMA_24) ##three parameters are strongly insignificant
+LB[3,5]
+
+SP_ARMA_24 <- arima(rt_SP, order = c(2,0,4))
+acf(SP_ARMA_24$residuals)
+SP_ARMA_24
+coeftest(SP_ARMA_24) ##three parameters are strongly insignificant
+LB[3,5]
+
+SP_ARMA_20 <- arima(rt_SP, order = c(2,0,0))
+acf(SP_ARMA_20$residuals)
+SP_ARMA_20
+coeftest(SP_ARMA_20) ##AR(2) parameter strongly insignificant
+LB[3,1]
+
+SP_ARMA_02 <- arima(rt_SP, order = c(0,0,2))
+acf(SP_ARMA_02$residuals)
+SP_ARMA_02
+coeftest(SP_ARMA_02) ##MA(2) parameter strongly insignificant
+LB[1,3]
+
+SP_ARMA_21 <- arima(rt_SP, order = c(2,0,1))
+acf(SP_ARMA_21$residuals)
+SP_ARMA_21
+coeftest(SP_ARMA_21) ##MA(2) parameter strongly insignificant
+LB[1,3]
+
+SP_ARMA_34 <- arima(rt_SP, order = c(3,0,4), include.mean = FALSE)
+acf(SP_ARMA_34$residuals)
+SP_ARMA_34
+coeftest(SP_ARMA_34) ##parameters significant but residuals confirmed only at the %1, still in the top 5 for LB (and higher than autoarima)
+Box.test(SP_ARMA_34$residuals,  lag = 10, type = c("Ljung-Box"))
+BIC(SP_ARMA_34) ##BIC lower than autoarima
+SP_ARMA_34$aic  ##AIC higher than autoarima
+
+
+library(forecast)
+auto.arima(rt_SP)
+
+acf(SP_ARMA_34$residuals^2)
+
+
+##ARMA-GARCH######################################
+niter_order = 5
+AIC = matrix(0, nrow = niter_order, ncol = niter_order)
+BIC = matrix(0, nrow = niter_order, ncol = niter_order)
+SIC = matrix(0, nrow = niter_order, ncol = niter_order)
+HQIC = matrix(0, nrow = niter_order, ncol = niter_order)
+LB = matrix(0, nrow = niter_order, ncol = niter_order)
+for(i in 1:niter_order)
+{
+  for(j in 1:niter_order){
+    uspec <- ugarchspec(variance.model = list(model = "sGARCH",
+                                              garchOrder = c(i,j)), 
+                        mean.model = SP_ARMA_34)
+    fit <- ugarchfit(uspec, data = SP_ARMA_34$residuals)
+    crit <- infocriteria(fit)
+    AIC[i,j] = crit[1]
+    BIC[i,j] = crit[2]
+    SIC[i,j] = crit[3]
+    HQIC[i,j] = crit[4]
+    y = Box.test(fit@fit$residuals, lag = 10, type = c("Ljung-Box"))
+    LB[i,j] = y$p.value 
+  }
+}
+
+#finding minimum AIC
+vector_AIC <- as.vector(AIC)
+sorted_AIC <- sort(vector_AIC)
+min_AIC <- head(sorted_AIC, 5)
+min_AIC_order <- list()
+for(i in c(1:5))
+{
+  min_AIC_order[[i]] <- which(AIC == min_AIC[i], arr.ind = TRUE)
+}
+min_AIC_order
+
+
+##finding minimum BIC
+vector_BIC <- as.vector(BIC)
+sorted_BIC <- sort(vector_BIC)
+min_BIC <- head(sorted_BIC, 5)
+min_BIC_order <- list()
+for(i in c(1:5))
+{
+  min_BIC_order[[i]] <- which(BIC == min_BIC[i], arr.ind = TRUE)
+}
+min_BIC_order
+
+##finding minimum SIC
+vector_SIC <- as.vector(SIC)
+sorted_SIC <- sort(vector_SIC)
+min_SIC <- head(sorted_SIC, 5)
+min_SIC_order <- list()
+for(i in c(1:5))
+{
+  min_SIC_order[[i]] <- which(SIC == min_SIC[i], arr.ind = TRUE)
+}
+min_SIC_order
+
+##finding minimum HQIC
+vector_HQIC <- as.vector(HQIC)
+sorted_HQIC <- sort(vector_HQIC)
+min_HQIC <- head(sorted_HQIC, 5)
+min_HQIC_order <- list()
+for(i in c(1:5))
+{
+  min_HQIC_order[[i]] <- which(HQIC == min_HQIC[i], arr.ind = TRUE)
+}
+min_HQIC_order
+
+
+##finding maximum LB
+vector_LB <- as.vector(LB)
+sorted_LB <- sort(vector_LB)
+max_LB <- tail(sorted_LB, 5)
+max_LB_order <- list()
+for(i in c(1:5))
+{
+  max_LB_order[[i]] <- which(LB == max_LB[i], arr.ind = TRUE)
+}
+max_LB_order
+
+
+SP_uspec <- ugarchspec(variance.model = list(model = "sGARCH",
+                                          garchOrder = c(2,1)), 
+                    mean.model = SP_ARMA_34)
+SP_fit <- ugarchfit(SP_uspec, data = SP_ARMA_34$residuals)
+SP_fit@fit$matcoef
+acf(SP_fit@fit$residuals)
+Box.test(SP_fit@fit$residuals, lag = 10, type = c("Ljung-Box"))
+plot(SP_fit)
+
+infocriteria(SP_fit)
+
+##(2,1), (3,1), (1,1) are the best across all criterion. While the difference between criterion are small, the best one appears to be
+##(2,1). Highest probability of independence, top 3 across all criterion and no parameters rejected
+
+
+
 
 rm(list = ls())
