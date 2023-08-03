@@ -114,4 +114,8 @@ s12 <- expand.grid("sigma[1]" = s,"sigma[2]" = s)
 wireframe2(cbind(s12, '(Cor_min)(sigma[1],sigma[2])'= CorBoundLN(s12, bound = "min")))
 wireframe2(cbind(s12, '(Cor_max)(sigma[1],sigma[2])'= CorBoundLN(s12)))
 
+#coefficent lower tail dependence###########################################
+
+
+
 rm(list =ls())

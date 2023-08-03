@@ -1,25 +1,26 @@
-#Descriptive Time series analysis of the S&P500 Index from approximately 2013 - 2022###################################
+#Descriptive Time series analysis of the S&P500 Index from approximately 2020 - 2022###################################
 
 # IMPORT DATA #################################################################################################
 setwd("C:/Users/edoar/OneDrive/Desktop/Thesis/R_Thesis/Data")
-SP500_data = read.csv("S&P500, 24-12-2012 to 21-12-2022_CLEAN.csv", header = TRUE)
+SP500_data = read.csv("S&P500, 01-01-2020 to 31-01-2022.csv", header = TRUE)
 
 ## PRICES, TIME AND LENGHT ####################################################################################
-Pt_SP <- SP500_data[,2] 
-Time_SP <- as.Date(as.character(SP500_data[,1]), "%m/%d/%Y")
+Pt_SP <- rev(SP500_data[,2])
+Time_SP <- rev(as.Date(as.character(SP500_data[,1]), "%m/%d/%Y"))
 N_SP <- length(Pt_SP)
 pt_SP <- log(Pt_SP)            # log prices for computation of log returns
-
 ### RETURNS ###################################################################################################
 Rt_SP <- diff(Pt_SP, lag = 1)/Pt_SP[-1]
 n_SP <- length(Rt_SP)
+rt_SP <- diff(pt_SP, lag = 1)
 
 plot(Time_SP[-1],Rt_SP,
      type = "l",
-     main = "S&P500 Returns: 25/12/2012 - 21/12/2022",
+     main = "S&P500 Returns: 03/01/2020 - 30/12/2022",
      xlab = "Time",
      ylab = "Returns")
 
+Time_SP
 summary(Rt_SP)
 
 #outliers##
@@ -40,9 +41,10 @@ print(outliers)
 #### LOG RETURNS ##############################################################################################
 rt_SP <- diff(pt_SP, lag = 1)
 
+par(mfrow = c(1,1))
 plot(Time_SP[-1],rt_SP,
-      type = "l",
-     main = "S&P500 Log-Returns: 25/12/2012 - 21/12/2022",
+     type = "l",
+     main = "S&P500 Log-Returns: 03/01/2020 - 30/12/2022",
      xlab = "Time",
      ylab = "Returns",
      col = "blue")
@@ -59,21 +61,29 @@ range_SP <- max(rt_SP) - min(rt_SP)
 range_SP
 
 IQR_SP <- IQR(rt_SP)
+IQR_SP
 ##### STATIONARITY ###########################################################################################
 library(timeSeries)
+library(aTSA)
 ADF_SP <- adf.test(rt_SP)
 ADF_SP$p.value
-ADF_SP$'critical values'
-
+ADF_SP
+?summary
 
 ##### MOMENTS #################################################################################################
 library(moments)
+mean_SP <- mean(rt_SP)
+std.error(rt_SP)
 sd_SP <- sd(rt_SP)
+sd_SP
 se_sd_SP <- sd_SP/sqrt(2*n_SP - 2)
+se_sd_SP
 skew_SP <- skewness(rt_SP)
+skew_SP
 V_skew = 6 * n_SP * (n_SP - 1) / ((n_SP - 2) * (n_SP + 1) * (n_SP + 3))
 sqrt(V_skew)
 kurt_SP <- kurtosis(rt_SP)
+kurt_SP
 V_kur = 4 * (n_SP^2 - 1) * V_skew / ((n_SP - 3) * (n_SP + 5))
 sqrt(V_kur)
 
@@ -83,16 +93,18 @@ sqrt(V_kur)
 
 ##### TEST FOR MEAN = 0 #######################################################################################
 t.test(rt_SP)
-# the small p-value indicates the refusal of the null hypothesis of true mean = 0
+t.test
+# the big p-value indicates the faliure to refuse the null hypothesis of true mean = 0
 
 ###### TESTING FOR NORMALITY ##################################################################################
 library(tseries)
 jarque.bera.test(rt_SP)
 # the extremely small p-value signifies that we can refuse the null hypothesis of normality
 
+
 qqnorm(rt_SP,
        datax = TRUE,
-       main = "Normal qq plot for SP LogReturns")
+       main = "Normal qq plot for SP Log-Returns")
 qqline(rt_SP,
        datax = TRUE)
 # as we could expect, while the sample and theoretical quantiles are approximately equal in the central range
@@ -127,9 +139,16 @@ qqplot(rt_SP, qt(grid,df=3),
 lmfit <- lm(qt(c(.25,.75),df=3) ~ quantile(rt_SP,c(.25,.75)) )
 abline(lmfit)
 
+ablin
+qqplot(rt_SP, qt(grid,df=2),
+       main="t-plot, df = 2",
+       xlab="Data",
+       ylab="t-quantiles")
+lmfit <- lm(qt(c(.25,.75),df=2) ~ quantile(rt_SP,c(.25,.75)) )
+abline(lmfit)
 
 # Between the three alternatives, it seems that a t-distribution with 3 degrees of freedom is the best approximation
-#df = 2 has been tested unsuccessfully
+#df = 2 has been tested unsuccessfully. Still doesn't capture well the lower quantiles
 
 ####### KERNEL DENSITY ESTIMATION ##############################################################################
 # We now try to perform a Kernel density estimation and comparing it with random data generated according to a
@@ -150,7 +169,7 @@ plot(KDEsim2_SP,
      col = "red")
 
 # We try to generate random data based on a t-distribution (shifted by the log returns parameters).
-# The t-seem to correctly approximate the density and bandwith (little  higher in the parametric)
+#Some differences appears but the distribution seems to capture the bandwith
 
 ######## DISTRIBUTION ESTIMATION ##############################################
 #We now use another approach to estimate the parameters of a t-distribution to our
@@ -181,19 +200,20 @@ qqplot(rt_SP, qt(grid,df= df_t_SP),
 lmfit <- lm(qt(c(.25,.75),df= df_t_SP) ~ quantile(rt_SP,c(.25,.75)) )
 abline(lmfit)
 
-#visually, it seems that the estimated dfs overperform the 3 dfs. However, we should still note that the 
-#difference is small
+#visually, it seems that the estimated dfs overperform the 3 dfs. However, we should still note that the theoretical quantiles
+#not seem to capture the lower tail of the distribution
 #we proceed with a KDE to close the test
-par(mfrow=c(1,3))
-
-plot(KDE_SP,
-     main = "KDE",
-     col = "red")
 
 sim1_est_SP <- rt(n_SP, df = 3) * sqrt(var(rt_SP) * 1/3) + mean(rt_SP) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
 KDEsim1_est_SP <- density(sim1_est_SP)
 sim2_est_SP <- rt(n_SP, df = df_t_SP) * sqrt(var(rt_SP) * (df_t_SP - 2)/df_t_SP) + mean(rt_SP) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
 KDEsim2_est_SP <- density(sim2_est_SP)
+
+par(mfrow=c(1,3))
+
+plot(KDE_SP,
+     main = "KDE",
+     col = "black")
 
 plot(KDEsim1_est_SP,
      main = "KDE 3 df",
@@ -202,17 +222,17 @@ plot(KDEsim2_est_SP,
      main = "KDE df estimated",
      col = "blue")
 
-#this image suggests that df = 3 seems better than the one estimated
 
 ######### TEST FOR SERIAL CORRELATION #########################################################################
 par(mfrow=c(1,2))
-acf(rt_SP)
-pacf(rt_SP)       
+acf(rt_SP,
+    main = "ACF LogReturns SP")
+pacf(rt_SP,
+     main = "PACF LogReturns SP")       
 Box.test(rt_SP, lag = 5, type = c("Ljung-Box")) 
 Box.test(rt_SP, lag = 10, type = c("Ljung-Box")) 
 Box.test(rt_SP, lag = 20, type = c("Ljung-Box")) 
-
-cor(rt_SP,rt_SP)
+Box.test(rt_SP, lag = 30, type = c("Ljung-Box"))
 
 
 # Using the Ljung-Box test, we test the null hypotheis of serial independence. As we can see from the 
@@ -220,24 +240,15 @@ cor(rt_SP,rt_SP)
 # significant. 
 # We can as a matter of fact refuse the null hypothesis of serial independence
 # 1% level: 
-# lag 5 - lag 7 - lag 9 - lag 21 - lag 23 - lag 30 
+# lag 5 - lag  - lag 10 - lag 20 - lag 30 
 # This could be a starting point for eventual modelling
-
-##ARCH effect############################################################
-sq_SP <- rt_SP^2
-par(mfrow=c(1,2))
-acf(sq_SP)
-pacf(rt_SP)
-pacf(sq_SP)
 
 ##ARMA model########################################################################
 library(broom)
 niter_order = 5
-sigma = matrix(0, nrow = niter_order, ncol = niter_order)
 AIC = matrix(0, nrow = niter_order, ncol = niter_order)
 bic = matrix(0, nrow = niter_order, ncol = niter_order)
 LB = matrix(0, nrow = niter_order, ncol = niter_order)
-sigma_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 AIC_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 bic_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 LB_nm = matrix(0, nrow = niter_order, ncol = niter_order)
@@ -245,19 +256,18 @@ for(i in c(0:4))
 {
   for(j in c(0:4)){
     fitAR <- arima(rt_SP, order = c(i,0,j))
-    sigma[i + 1,j + 1] = fitAR$sigma2
     AIC[i + 1,j + 1] = fitAR$aic
     bic[i + 1,j + 1] = BIC(fitAR)
     y = Box.test(fitAR$residuals, lag = 10,fitdf = (i + j), type = c("Ljung-Box"))
     LB[i + 1,j + 1] = y$p.value 
     fitAR_nm <- arima(rt_SP, order = c(i,0,j), include.mean = FALSE)
-    sigma_nm[i + 1,j + 1] = fitAR_nm$sigma2
     AIC_nm[i + 1,j + 1] = fitAR_nm$aic
     bic_nm[i + 1,j + 1] = BIC(fitAR_nm)
     y_nm = Box.test(fitAR_nm$residuals, lag = 10, fitdf = (i + j), type = c("Ljung-Box"))
     LB_nm[i + 1,j + 1] = y_nm$p.value
   }
 }
+auto.arima(rt_SP)
 
 #finding minimum variance
 vector_sigma <- as.vector(sigma)
@@ -347,72 +357,29 @@ for(i in c(1:5))
 }
 max_LB_order_nm
 
-#ARMA minimum AIC
-par(mfrow = c(1,1))
-SP_ARMA_44 <- arima(rt_SP, order = c(4,0,4))
-acf(SP_ARMA_44$residuals)
-SP_ARMA_44 
-coeftest(SP_ARMA_44) ##perfect parameters, residual non i.i.d (not visually though)
-Box.test(SP_ARMA_44$residuals, lag = 10, fitdf = 8, type = c("Ljung-Box"))
-SP_ARMA_44$aic
-
-SP_ARMA_34 <- arima(rt_SP, order = c(3,0,4))
-acf(SP_ARMA_34$residuals)
-SP_ARMA_34
-coeftest(SP_ARMA_34) ##plausible but MA(4) not significant
-Box.test(SP_ARMA_34$residuals,  lag = 30, fitdf = 7, type = c("Ljung-Box"))
-
-SP_ARMA_43 <- arima(rt_SP, order = c(4,0,3))
-acf(SP_ARMA_43$residuals)
-SP_ARMA_43
-coeftest(SP_ARMA_43) ##AR(4) not significant
-Box.test(SP_ARMA_43$residuals,  lag = 10, fitdf = 7, type = c("Ljung-Box"))
-
-SP_ARMA_33 <- arima(rt_SP, order = c(3,0,3), include.mean = FALSE)
-acf(SP_ARMA_33$residuals)
-SP_ARMA_33
-coeftest(SP_ARMA_33) ##strongly confirmed all parameters 
-Box.test(SP_ARMA_33$residuals,  lag = 10, fitdf = 6, type = c("Ljung-Box")) ##residuals appear to deviate often from confidence band
-
-SP_ARMA_42 <- arima(rt_SP, order = c(4,0,2))
-acf(SP_ARMA_42$residuals)
-SP_ARMA_42
-coeftest(SP_ARMA_42) ##to many insignificant parameters
-Box.test(SP_ARMA_42$residuals,  lag = 10, fitdf = 6, type = c("Ljung-Box"))
-
-SP_ARMA_24 <- arima(rt_SP, order = c(2,0,4))
-acf(SP_ARMA_24$residuals)
-SP_ARMA_24
-coeftest(SP_ARMA_24) ##too many insignificant parameters
-LB[1,2]
-
 library(forecast)
 auto.arima(rt_SP)
 
-SP_ARMA_20 <- arima(rt_SP, order = c(2,0,0), include.mean = FALSE)
-acf(SP_ARMA_20$residuals)
-SP_ARMA_20
-coeftest(SP_ARMA_20)
-Box.test(SP_ARMA_20$residuals,  lag = 10, fitdf = 2, type = c("Ljung-Box"))
-
-SP_ARMA_33 <- arima(rt_SP, order = c(3,0,3))
 par(mfrow=c(1,2))
-SP_ARMA_20 <- arima(rt_SP, order = c(2,0,0), include.mean = FALSE)
-acf(SP_ARMA_33$residuals)
-acf(SP_ARMA_20$residuals)
-SP_ARMA_33
-SP_ARMA_20
-coeftest(SP_ARMA_33) ##parameters significant but residuals confirmed only at the %1, still in the top 5 for LB (and higher than autoarima)
-coeftest(SP_ARMA_20)
-Box.test(SP_ARMA_33$residuals,  lag = 10, fitdf = 6, type = c("Ljung-Box"))
-Box.test(SP_ARMA_20$residuals,  lag = 10, fitdf = 2, type = c("Ljung-Box"))
-SP_ARMA_33$aic ##AIC lower than autoarima
-SP_ARMA_20$aic
-BIC(SP_ARMA_33) ##BIC lower than autoarima
-BIC(SP_ARMA_20)
-  
+SP_ARMA_22 <- arima(rt_SP, order = c(2,0,2), include.mean = FALSE)
+SP_ARMA_44 <- arima(rt_SP, order = c(4,0,4), include.mean = FALSE)
+acf(SP_ARMA_22$residuals, 
+    main = "ACF residuals SP ARMA(2,2)")
+acf(SP_ARMA_44$residuals)
+SP_ARMA_22
+SP_ARMA_44
+coeftest(SP_ARMA_22) 
+coeftest(SP_ARMA_44) #AR(3) insignificant
+Box.test(SP_ARMA_22$residuals,  lag = 10, fitdf = 4, type = c("Ljung-Box"))
+Box.test(SP_ARMA_44$residuals,  lag = 10, fitdf = 8, type = c("Ljung-Box"))
+SP_ARMA_22$aic ##AIC lower than autoarima, but only slightly
+SP_ARMA_44$aic
+BIC(SP_ARMA_22) ##BIC higher than autoarima
+BIC(SP_ARMA_44)
 
-acf(SP_ARMA_33$residuals^2)
+
+
+acf(SP_ARMA_22$residuals^2)
 
 
 ##ARMA-GARCH######################################
@@ -427,7 +394,7 @@ for(i in 1:niter_order)
   for(j in 1:niter_order){
     uspec <- ugarchspec(variance.model = list(model = "sGARCH",
                                               garchOrder = c(i,j)), 
-                        mean.model = list(armaOrder = c(3,3)),
+                        mean.model = list(armaOrder = c(4,4), include.mean = FALSE),
                         distribution.model = "std")
     fit <- ugarchfit(uspec, data = rt_SP)
     crit <- infocriteria(fit)
@@ -499,26 +466,24 @@ for(i in c(1:5))
 }
 max_LB_order
 
+
 library(rugarch)
 SP_uspec <- ugarchspec(variance.model = list(model = "sGARCH",
-                                                      garchOrder = c(1,1)), 
-                                mean.model = list(armaOrder = c(3,3)),
-                                distribution.model = "std")
+                                             garchOrder = c(1,1)),
+                       mean.model = list(armaOrder = c(2,2), include.mean = FALSE),
+                       distribution.model = "std")
 SP_fit <- ugarchfit(SP_uspec, data = rt_SP)
 SP_fit@fit$matcoef
 par(mfrow = c(1,1))
 acf(SP_fit@fit$z)
 Box.test(SP_fit@fit$z, lag = 10, type = c("Ljung-Box"))
 plot(SP_fit)
-
 infocriteria(SP_fit)
+
+#best choice, ARMA(2,2)-GARCH(1,1)
 
 z_SP <- SP_fit@fit$z
 
-
-##(1,1). Highest probability of independence, top 1 across all criterion and no parameters rejected
-
-
-
-
 rm(list = ls())
+
+

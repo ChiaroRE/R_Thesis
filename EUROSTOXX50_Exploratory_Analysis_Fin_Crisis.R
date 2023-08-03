@@ -1,10 +1,10 @@
 # IMPORT DATA #################################################################################################
 setwd("C:/Users/edoar/OneDrive/Desktop/Thesis/R_Thesis/Data/")
-EUROSTOX_data = read.csv("EUROSTOXX50, 24-12-2012 to 21-12-2022_CLEAN.csv", header = TRUE)
+EUROSTOX_data = read.csv("EUROSTOXX50, 01-01-2007  to 31-12-2009_CLEAN.csv", header = TRUE)
 
 ## PRICES, TIME AND LENGHT ####################################################################################
-Pt_EUR <- EUROSTOX_data[,6] 
-Time_EUR <- as.Date(as.character(EUROSTOX_data[,1]), "%d/%m/%Y")
+Pt_EUR <- rev(EUROSTOX_data[,5]) 
+Time_EUR <- rev(as.Date(as.character(EUROSTOX_data[,1]), "%m/%d/%Y"))
 N_EUR <- length(Pt_EUR)
 pt_EUR <- log(Pt_EUR)            # log prices for computation of log returns
 
@@ -41,15 +41,15 @@ rt_EUR <- diff(pt_EUR, lag = 1)
 
 plot(Time_EUR[-1],rt_EUR,
      type = "l",
-     main = "EUROSTOXX50 Log-Returns: 25/12/2012 - 21/12/2022",
+     main = "EUROSTOXX50 Log-Returns: 03/01/2020 - 30/12/2022",
      xlab = "Time",
      ylab = "Returns",
      col = "blue")
 
-summary(rt_EUR)
+summary <- as.matrix(summary(rt_EUR))
 cor(Rt_EUR,rt_EUR)                # correlation between Returns and Log Returns, expected good approximation for +-5%
 plot(Rt_EUR,rt_EUR)
-
+print(summary)
 library(plotrix)
 std.error(rt_EUR)
 
@@ -63,12 +63,19 @@ IQR_EUR
 library(timeSeries)
 ADF_EUR <- adf.test(rt_EUR)
 ADF_EUR$p.value
+ADF_EUR
 ##### MOMENTS #################################################################################################
 library(moments)
+mean_EUR <- mean(rt_EUR)
+std.error(rt_EUR)
 sd_EUR <- sd(rt_EUR)
+sd_EUR
 se_sd_EUR <- sd_EUR/sqrt(2*n_EUR- 2)
-skew_EUR <- skewness(rt_EUR)         
+se_sd_EUR
+skew_EUR <- skewness(rt_EUR) 
+skew_EUR
 kurt_EUR <- kurtosis(rt_EUR)
+kurt_EUR
 V_skew = 6 * n_EUR * (n_EUR - 1) / ((n_EUR - 2) * (n_EUR + 1) * (n_EUR + 3))
 sqrt(V_skew)
 kurt_EUR <- kurtosis(rt_EUR)
@@ -84,6 +91,7 @@ t.test(rt_EUR)
 ###### TESTING FOR NORMALITY ##################################################################################
 library(tseries)
 JB_EUR <- jarque.bera.test(rt_EUR)
+JB_EUR
 # the extremely small p-value signifies that we can refuse the null hypothesis of normality
 
 qqnorm(rt_EUR,
@@ -97,6 +105,7 @@ qqline(rt_EUR,
 # t-distribution at different levels of degrees of freedom
 
 ####### TESTING FOR T-DISTRIBUTION ############################################################################
+
 grid <- (1:n_EUR)/(n_EUR+1)
 par(mfrow=c(1,3))
 
@@ -123,22 +132,20 @@ qqplot(rt_EUR, qt(grid,df=3),
 lmfit <- lm(qt(c(.25,.75),df=3) ~ quantile(rt_EUR,c(.25,.75)) )
 abline(lmfit)
 
-# Between the four alternatives, it seems that a t-distribution with 4 degrees of freedom is the best approximation
-# However we should notice that the higher quantiles seems to deviate significantly, still the smallest deviation
-# compared to other degrees of freedom and the normal distribution
+#It seems that the best distribution is the df 3
 
 ####### KERNEL DENSITY ESTIMATION ##############################################################################
 # We now try to perform a Kernel density estimation and comparing it with random data generated according to a
-# t-distribution with 4 degrees of freedom
+# t-distribution with 3 degrees of freedom
 
 par(mfrow=c(1,2))
-KDE_EUR <- density(rt_EUR)
+KDE_EUR <- density(rt_EUR) 
 
 plot(KDE_EUR,
      main = "KDE",
      col = "red")
 
-sim1_EUR <- rt(n_EUR, df = 4) * sqrt(var(rt_EUR) * 2/4) + mean(rt_EUR) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
+sim1_EUR <- rt(n_EUR, df = 3) * sqrt(var(rt_EUR) * 1/3) + mean(rt_EUR) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
 KDEsim_EUR <- density(sim1_EUR)
 
 plot(KDEsim_EUR,
@@ -155,19 +162,19 @@ plot(KDEsim_EUR,
 library(MASS)
 library(fitdistrplus) #fitting t-dist
 library(metRology) #addition of t-scaled distrbiuton
-fit_t_EUR <- fitdist(rt_EUR,"t.scaled", start = list(df = 4, mean = mean(rt_EUR), sd = sd(rt_EUR)))
+fit_t_EUR <- fitdist(rt_EUR,"t.scaled", start = list(df = 3, mean = mean(rt_EUR), sd = sd(rt_EUR)))
 summary(fit_t_EUR)
 df_t_EUR = fit_t_EUR$estimate[1]
 
 #Let's try to test this estimate and compare it with the previous chosen 3 dfs
 par(mfrow=c(1,2))
 
-qqplot(rt_EUR, qt(grid,df=4), 
-       main="t-plot, df = 4 ",
+qqplot(rt_EUR, qt(grid,df=3), 
+       main="t-plot, df = 3 ",
        xlab="Data",
        ylab="t-quantiles")
 
-lmfit <- lm(qt(c(.25,.75),df=4) ~ quantile(rt_EUR,c(.25,.75)) )
+lmfit <- lm(qt(c(.25,.75),df=3) ~ quantile(rt_EUR,c(.25,.75)) )
 abline(lmfit)
 
 qqplot(rt_EUR, qt(grid,df= df_t_EUR), 
@@ -178,22 +185,24 @@ qqplot(rt_EUR, qt(grid,df= df_t_EUR),
 lmfit <- lm(qt(c(.25,.75),df= df_t_EUR) ~ quantile(rt_EUR,c(.25,.75)) )
 abline(lmfit)
 
-#visually, it seems that the estimated dfs overperform the 3 dfs. However, we should still note that the theoretical quantiles
-#seem to better capture the lower tail of the distribution. These are usually our quantiles of interest
+#visually, it seems that the estimated dfs underperforms the 3 dfs. However, we should still note that the theoretical quantiles
+#seem to better capture the tails of the distribution. These are usually our quantiles of interest
 #we proceed with a KDE to close the test
-par(mfrow=c(1,3))
 
-plot(KDE_EUR,
-     main = "KDE",
-     col = "red")
 
-sim1_est_EUR <- rt(n_EUR, df = 4) * sqrt(var(rt_EUR) * 2/4) + mean(rt_EUR) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
+sim1_est_EUR <- rt(n_EUR, df = 3) * sqrt(var(rt_EUR) * 1/3) + mean(rt_EUR) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
 KDEsim1_est_EUR<- density(sim1_est_EUR)
 sim2_est_EUR <- rt(n_EUR, df = df_t_EUR) * sqrt(var(rt_EUR) * (df_t_EUR - 2)/df_t_EUR) + mean(rt_EUR) #simulate t dist with rt parameters rt*sqrt(var * df - 2/df ) + mean
 KDEsim2_est_EUR <- density(sim2_est_EUR)
 
+par(mfrow=c(1,3))
+
+plot(KDE_EUR,
+     main = "KDE",
+     col = "black")
+
 plot(KDEsim1_est_EUR,
-     main = "KDE 4 df",
+     main = "KDE 3 df",
      col = "red")
 plot(KDEsim2_est_EUR,
      main = "KDE df estimated",
@@ -203,21 +212,24 @@ plot(KDEsim2_est_EUR,
 
 ######## TEST FOR SERIAL CORRELATION #########################################################################
 par(mfrow=c(1,2))
-acf(rt_EUR)
-pacf(rt_EUR)       
+
+acf(rt_EUR,
+    main = "ACF LogReturns EUR")
+pacf(rt_EUR,
+     main = "PACF LogReturns EUR")       
 Box.test(rt_EUR, lag = 5, type = c("Ljung-Box")) 
 Box.test(rt_EUR, lag = 10, type = c("Ljung-Box")) 
 Box.test(rt_EUR, lag = 20, type = c("Ljung-Box")) 
-b <- Box.test(rt_EUR, lag = 30, type = c("Ljung-Box"))  
+Box.test(rt_EUR, lag = 30, type = c("Ljung-Box"))  
 
 # Using the Ljung-Box test, we test the null hypotheis of serial independence. As we can see from the 
 # correlogram, there are different lags at which the serial correlation could be considered statistically
 # significant. 
 # We can as a matter of fact refuse the null hypothesis of serial independence
-# 5% level:
-# lag 7 - lag 13
 # 1% level: 
-# lag 15 - lag 23
+# lag 5,10
+# 5% level:
+# lag 20,30
 # This could be a starting point for eventual modelling
 
 ##ARCH effect#########################################################################################################
@@ -230,11 +242,9 @@ pacf(sq_EUR)
 ##ARMA model################################################################################################################
 library(broom)
 niter_order = 5
-sigma = matrix(0, nrow = niter_order, ncol = niter_order)
 AIC = matrix(0, nrow = niter_order, ncol = niter_order)
 bic = matrix(0, nrow = niter_order, ncol = niter_order)
 LB = matrix(0, nrow = niter_order, ncol = niter_order)
-sigma_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 AIC_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 bic_nm = matrix(0, nrow = niter_order, ncol = niter_order)
 LB_nm = matrix(0, nrow = niter_order, ncol = niter_order)
@@ -242,13 +252,11 @@ for(i in c(0:4))
 {
   for(j in c(0:4)){
     fitAR <- arima(rt_EUR, order = c(i,0,j))
-    sigma[i + 1,j + 1] = fitAR$sigma2
     AIC[i + 1,j + 1] = fitAR$aic
     bic[i + 1,j + 1] = BIC(fitAR)
     y = Box.test(fitAR$residuals, lag = 10, fitdf = (i + j), type = c("Ljung-Box"))
     LB[i + 1,j + 1] = y$p.value
-    fitAR_nm <- arima(rt_SP, order = c(i,0,j), include.mean = FALSE)
-    sigma_nm[i + 1,j + 1] = fitAR_nm$sigma2
+    fitAR_nm <- arima(rt_EUR, order = c(i,0,j), include.mean = FALSE)
     AIC_nm[i + 1,j + 1] = fitAR_nm$aic
     bic_nm[i + 1,j + 1] = BIC(fitAR_nm)
     y_nm = Box.test(fitAR_nm$residuals, lag = 10, fitdf = (i + j), type = c("Ljung-Box"))
@@ -304,92 +312,12 @@ for(i in c(1:5))
 }
 max_LB_order
 
-#ARMA minimum AIC
-EUR_ARMA_32 <- arima(rt_EUR, order = c(3,0,2))
-acf(EUR_ARMA_32$residuals)
-EUR_ARMA_32
-coeftest(EUR_ARMA_32) ##residuals strongly not correlated but AR(3) strongly insignificant (0.91), intercept too
-LB[4,3]
+par(mfrow = c(1,1))
 
-EUR_ARMA_32_nm <- arima(rt_EUR, order = c(3,0,2), include.mean = FALSE)
-acf(EUR_ARMA_32_nm$residuals)
-EUR_ARMA_32_nm
-coeftest(EUR_ARMA_32_nm) ##residuals strongly not correlated but AR(3) strongly insignificant (0.91), intercept too
-Box.test(EUR_ARMA_32_nm$residuals,  lag = 30, type = c("Ljung-Box"))
 
-EUR_ARMA_23 <- arima(rt_EUR, order = c(2,0,3))
-acf(EUR_ARMA_23$residuals)
-EUR_ARMA_23
-coeftest(EUR_ARMA_23) ##residuals strongly not correlated but MA(3) strongly insignificant (0.87), intercept too
-LB[3,4]
-
-EUR_ARMA_00 <- arima(rt_EUR, order = c(0,0,0))
-acf(EUR_ARMA_00$residuals)
-EUR_ARMA_00
-coeftest(EUR_ARMA_00) ##residuals mildly correlated (5%), intercept strongly insignificant
-LB[1,1]
-
-EUR_ARMA_10 <- arima(rt_EUR, order = c(1,0,0))
-acf(EUR_ARMA_10$residuals)
-EUR_ARMA_10
-coeftest(EUR_ARMA_10) ##residuals mildly correlated, intercept and AR(1) strongly insignificant
-LB[2,1]
-
-EUR_ARMA_01 <- arima(rt_EUR, order = c(0,0,1))
-acf(EUR_ARMA_01$residuals)
-EUR_ARMA_01
-coeftest(EUR_ARMA_01) ##residuals mildly correlated, intercept and MA(1) strongly insignificant
-LB[1,2]
-
-EUR_ARMA_42 <- arima(rt_EUR, order = c(4,0,2))
-acf(EUR_ARMA_42$residuals)
-EUR_ARMA_42
-coeftest(EUR_ARMA_42) ##residuals mildly correlated (10%), intercept, AR(3) and AR(4) strongly insignificant
-LB[5,3]
-
-EUR_ARMA_43 <- arima(rt_EUR, order = c(4,0,3))
-acf(EUR_ARMA_43$residuals)
-EUR_ARMA_43
-coeftest(EUR_ARMA_43) ##residuals not correlated, intercept, only 2/8 parameters are significant
-LB[5,4]
-
-EUR_ARMA_34 <- arima(rt_EUR, order = c(3,0,4))
-acf(EUR_ARMA_34$residuals)
-EUR_ARMA_34
-coeftest(EUR_ARMA_34) ##residuals not correlated, intercept, only 2/8 parameters are significant
-LB[4,5]
-
-EUR_ARMA_02 <- arima(rt_EUR, order = c(0,0,2))
-acf(EUR_ARMA_02$residuals)
-EUR_ARMA_02
-coeftest(EUR_ARMA_02) ##residuals mildly correlated (10%), all parameters are insignificant
-LB[1,3]
-
-EUR_ARMA_20 <- arima(rt_EUR, order = c(2,0,0))
-acf(EUR_ARMA_20$residuals)
-EUR_ARMA_20
-coeftest(EUR_ARMA_20) ##residuals mildly correlated (10%), all parameters are insignificant
-LB[3,1]
-
-EUR_ARMA_33 <- arima(rt_EUR, order = c(3,0,3), include.mean = FALSE)
-EUR_ARMA_00_nm <- arima(rt_EUR, order = c(0,0,0), include.mean = FALSE)
-EUR_ARMA_33
-EUR_ARMA_00_nm
-coeftest(EUR_ARMA_33) ##perfect
-coeftest(EUR_ARMA_00_nm)
-Box.test(EUR_ARMA_33$residuals,  lag = 10, type = c("Ljung-Box"), fitdf = 6)
-Box.test(EUR_ARMA_00_nm$residuals,  lag = 10, type = c("Ljung-Box"), fitdf = 0) ##definitely more independent than autoarima (0.12 vs 0.006)
-BIC(EUR_ARMA_33) ##BIC higher than autoarima
-BIC(EUR_ARMA_00_nm)
-EUR_ARMA_33$aic 
-EUR_ARMA_00_nm$aic##AIC lower than autoarima
-par(mfrow = c(1,2))
-acf(EUR_ARMA_00_nm$residuals)
-acf(EUR_ARMA_33$residuals)
-
+library(forecast)
 auto.arima(rt_EUR)
-
-acf(EUR_ARMA_33$residuals^2)
+#best (2,3) zero mean
 
 #GARCH model
 library(rugarch)
@@ -404,7 +332,7 @@ for(i in 1:niter_order)
   for(j in 1:niter_order){
     uspec <- ugarchspec(variance.model = list(model = "sGARCH",
                                               garchOrder = c(i,j)), 
-                        mean.model = list(armaOrder = c(3,3), include.mean = FALSE),
+                        mean.model = list(armaOrder = c(2,3), include.mean = FALSE),
                         distribution.model = "std")
     fit <- ugarchfit(uspec, data = rt_EUR)
     crit <- infocriteria(fit)
@@ -477,23 +405,18 @@ max_LB_order
 
 EUR_uspec <- ugarchspec(variance.model = list(model = "sGARCH",
                                               garchOrder = c(1,1)), 
-                        mean.model =list(armaOrder = c(3,3), include.mean = FALSE),
+                        mean.model =list(armaOrder = c(2,3), include.mean = FALSE),
                         distribution.model = "std")
 EUR_fit <- ugarchfit(EUR_uspec, data = rt_EUR)
 EUR_fit@fit$matcoef
+par(mfrow = c(1,1))
 acf(EUR_fit@fit$z)
 Box.test(EUR_fit@fit$z, lag = 30, type = c("Ljung-Box"))
 plot(EUR_fit)
 infocriteria(EUR_fit)
 
+#ARMA(2,3)zm - GARCH(1,1) seems to be the best fit. second best ARMA(3,3) - GARCH(2,1)
 
 EUR_fit@fit$matcoef  
 
 z_EUR <- EUR_fit@fit$z
-
-#it appears that the best fit is a (3,3) or (1,1). Both are present in the top 5 across all criterion.
-#(1,1) since all parameters are significant, while critertions give different conclusions, this one is the most probable
-#across all regarding independence and (3,3) has two parameters insignificant (one at 10% and one even higher)
-
-rm(list = ls())
-
